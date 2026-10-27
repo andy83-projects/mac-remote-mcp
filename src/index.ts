@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import express from "express";
+import { readNetworkOptions, startNetworkServers } from "./network.js";
 import { bearerAuth } from "./auth.js";
 import { logAudit } from "./logger.js";
 import { registerShellTools } from "./tools/shell.js";
@@ -85,18 +86,12 @@ async function runHTTP(): Promise<void> {
     res.status(200).json({ status: "session closed" });
   });
 
-  const port = parseInt(process.env.PORT || "3000", 10);
-  const host = process.env.HOST || "127.0.0.1";
-
-  app.listen(port, host, () => {
-    console.error(`mac-remote-mcp running on http://${host}:${port}/mcp`);
-    console.error(`Health check: http://${host}:${port}/health`);
-    if (!process.env.MCP_API_KEY) {
-      console.error("⚠️  WARNING: MCP_API_KEY not set — server is unauthenticated!");
-    } else {
-      console.error("✅ Bearer authentication enabled");
-    }
-  });
+  await startNetworkServers(app, readNetworkOptions(process.env));
+  if (!process.env.MCP_API_KEY) {
+    console.error("⚠️  WARNING: MCP_API_KEY not set — server is unauthenticated!");
+  } else {
+    console.error("✅ Bearer authentication enabled");
+  }
 }
 
 // ── stdio transport (for local use / Claude Desktop) ──────────

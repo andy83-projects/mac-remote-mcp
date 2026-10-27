@@ -1,5 +1,22 @@
 /* MacRemoteMCP — English localization */
 
+/* Network and TLS settings */
+"settings.network.title" = "Network & HTTPS";
+"settings.network.localhost" = "Localhost only";
+"settings.network.lan" = "Specific LAN IP";
+"settings.network.custom" = "Custom / multiple IPs";
+"settings.network.hint" = "LAN IP must belong to this Mac. Custom: comma-separated IPs; 0.0.0.0 = all IPv4.";
+"settings.network.invalid" = "Cannot save network settings";
+"settings.network.port_error" = "Ports must be whole numbers between 1 and 65535.";
+"settings.network.address_error" = "Enter valid IPv4/IPv6 addresses, separated by commas for custom binding.";
+"settings.network.lan_error" = "Enter one non-loopback LAN IP, not a wildcard address.";
+"settings.tls.enable" = "Enable HTTPS (replaces HTTP on the MCP port)";
+"settings.tls.cert" = "Certificate PEM";
+"settings.tls.key" = "Private key PEM";
+"settings.tls.browse" = "Browse…";
+"settings.tls.hint" = "Clients must trust the issuer; certificate SAN must match the connection hostname.";
+"settings.tls.path_error" = "Select readable PEM files using absolute paths without line breaks.";
+
 /* ── Menu Bar: AppDelegate ─────────────────────────────── */
 "menu.status.initial" = "Status: Stopped";
 "menu.apikey.loading" = "API Key: Loading...";

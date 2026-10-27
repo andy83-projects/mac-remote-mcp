@@ -25,7 +25,10 @@ class ProcessManager {
         process.environment = [
             "TRANSPORT": "http",
             "PORT": String(config.serverPort),
-            "HOST": "127.0.0.1",
+            "HOST": config.serverHost,
+            "TLS_ENABLED": config.tlsEnabled ? "true" : "false",
+            "TLS_CERT_PATH": config.tlsCertPath,
+            "TLS_KEY_PATH": config.tlsKeyPath,
             "MCP_API_KEY": config.apiKey,
             "PATH": config.pathEnv,
         ]
@@ -191,7 +194,10 @@ class ProcessManager {
                 }
             }
         } else {
-            process.arguments = ["tunnel", "--url", "http://127.0.0.1:\(config.serverPort)"]
+            process.arguments = ["tunnel", "--url", config.localServerURL]
+            if config.tlsEnabled {
+                process.arguments! += ["--origin-ca-pool", config.tlsCertPath]
+            }
         }
         process.environment = ["PATH": config.pathEnv]
 
@@ -274,7 +280,10 @@ class ProcessManager {
             task.executableURL = URL(fileURLWithPath: "/usr/bin/curl")
             task.arguments = ["-s", "-o", "/dev/null", "-w", "%{http_code}",
                               "--connect-timeout", "1",
-                              "http://127.0.0.1:\(Config.shared.serverPort)/health"]
+                              Config.shared.localServerURL + "/health"]
+            if Config.shared.tlsEnabled {
+                task.arguments! += ["--cacert", Config.shared.tlsCertPath]
+            }
             let pipe = Pipe()
             task.standardOutput = pipe
             task.standardError = Pipe()

@@ -35,7 +35,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             PermissionChecker.showPermissionDialog()
         }
 
-        if Config.shared.autoStart {
+        if CommandLine.arguments.contains("--start-server") {
+            processManager.startServer()
+            updateMenuState()
+        } else if Config.shared.autoStart {
             processManager.startAll()
             updateMenuState()
         }

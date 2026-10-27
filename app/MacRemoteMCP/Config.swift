@@ -7,6 +7,16 @@ class Config {
     let logDir: String
     let configDir: String
     let apiKey: String
+    let serverHost: String
+    let tlsEnabled: Bool
+    let tlsCertPath: String
+    let tlsKeyPath: String
+    var localServerURL: String {
+        let host = serverHost.components(separatedBy: ",").first?.trimmingCharacters(in: .whitespaces) ?? "127.0.0.1"
+        let localHost = host == "0.0.0.0" ? "127.0.0.1" : (host == "::" ? "::1" : host)
+        let authority = localHost.contains(":") ? "[\(localHost)]" : localHost
+        return "\(tlsEnabled ? "https" : "http")://\(authority):\(serverPort)"
+    }
     let serverPort: Int
     let playwrightPort: Int
     let proxyPort: Int
@@ -65,6 +75,10 @@ class Config {
             Config.saveEnv(envVars, to: envPath)
         }
 
+        serverHost = envVars["HOST"] ?? "127.0.0.1"
+        tlsEnabled = ["true", "1"].contains((envVars["TLS_ENABLED"] ?? "false").lowercased())
+        tlsCertPath = envVars["TLS_CERT_PATH"] ?? ""
+        tlsKeyPath = envVars["TLS_KEY_PATH"] ?? ""
         serverPort = Int(envVars["PORT"] ?? "3000") ?? 3000
         playwrightPort = Int(envVars["PLAYWRIGHT_PORT"] ?? "3001") ?? 3001
         proxyPort = Int(envVars["PROXY_PORT"] ?? "3002") ?? 3002

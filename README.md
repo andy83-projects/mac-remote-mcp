@@ -1,5 +1,7 @@
 # MacRemoteMCP
 
+For the source-only HTTPS and network Settings extension, see [HTTPS and network Settings](docs/https-network-settings.md).
+
 A macOS menu bar app + MCP server for remotely controlling a Mac from Claude.ai / Claude Code.
 
 Start all services with one click and securely control your Mac from anywhere in the world via a Cloudflare Tunnel.

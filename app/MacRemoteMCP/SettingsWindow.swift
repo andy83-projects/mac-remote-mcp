@@ -1,8 +1,14 @@
 import Cocoa
+import Darwin
 
 class SettingsWindow: NSObject, NSWindowDelegate {
     private var window: NSWindow?
     private var apiField: NSTextField?
+    private var bindMode: NSPopUpButton?
+    private var bindAddress: NSTextField?
+    private var tlsCheck: NSButton?
+    private var certField: NSTextField?
+    private var keyField: NSTextField?
 
     func show() {
         if let w = window, w.isVisible { w.makeKeyAndOrderFront(nil); NSApp.activate(ignoringOtherApps: true); return }
@@ -11,7 +17,7 @@ class SettingsWindow: NSObject, NSWindowDelegate {
         NSApp.setActivationPolicy(.regular)
 
         let w = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 520, height: 620),
+            contentRect: NSRect(x: 0, y: 0, width: 520, height: 720),
             styleMask: [.titled, .closable, .miniaturizable],
             backing: .buffered, defer: false
         )
@@ -31,9 +37,9 @@ class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     private func buildContent() -> NSView {
-        let container = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 620))
+        let container = NSView(frame: NSRect(x: 0, y: 0, width: 520, height: 900))
 
-        var y = 580
+        var y = 860
 
         // ── Title ──
         let title = makeLabel(L("settings.window.title"), size: 18, bold: true)
@@ -100,6 +106,63 @@ class SettingsWindow: NSObject, NSWindowDelegate {
             y -= 28
         }
         y -= 8
+
+        // ── Network / TLS ──
+        let networkLabel = makeLabel(L("settings.network.title"), size: 13, bold: true)
+        networkLabel.frame = NSRect(x: 20, y: y, width: 480, height: 20)
+        container.addSubview(networkLabel)
+        y -= 30
+
+        let mode = NSPopUpButton(frame: NSRect(x: 20, y: y, width: 215, height: 26))
+        mode.addItems(withTitles: [L("settings.network.localhost"), L("settings.network.lan"), L("settings.network.custom")])
+        let currentHost = Config.shared.serverHost
+        mode.selectItem(at: currentHost == "127.0.0.1" ? 0 : (currentHost.contains(",") || currentHost == "0.0.0.0" || currentHost.contains(":") ? 2 : 1))
+        mode.target = self
+        mode.action = #selector(networkModeChanged)
+        container.addSubview(mode)
+        bindMode = mode
+        let address = NSTextField(frame: NSRect(x: 245, y: y, width: 255, height: 24))
+        address.stringValue = currentHost
+        address.placeholderString = "10.0.0.53"
+        container.addSubview(address)
+        bindAddress = address
+        networkModeChanged()
+        y -= 26
+        let bindHint = makeLabel(L("settings.network.hint"), size: 10, bold: false)
+        bindHint.frame = NSRect(x: 20, y: y, width: 480, height: 18)
+        bindHint.textColor = .secondaryLabelColor
+        container.addSubview(bindHint)
+        y -= 28
+
+        let tls = NSButton(checkboxWithTitle: L("settings.tls.enable"), target: nil, action: nil)
+        tls.frame = NSRect(x: 20, y: y, width: 480, height: 20)
+        tls.state = Config.shared.tlsEnabled ? .on : .off
+        container.addSubview(tls)
+        tlsCheck = tls
+        y -= 30
+        for (index, labelText, value) in [(0, L("settings.tls.cert"), Config.shared.tlsCertPath), (1, L("settings.tls.key"), Config.shared.tlsKeyPath)] {
+            let label = makeLabel(labelText, size: 11, bold: false)
+            label.frame = NSRect(x: 20, y: y, width: 110, height: 20)
+            container.addSubview(label)
+            let field = NSTextField(frame: NSRect(x: 135, y: y, width: 290, height: 24))
+            field.stringValue = value
+            field.placeholderString = "/absolute/path/to/file.pem"
+            container.addSubview(field)
+            if index == 0 { certField = field } else { keyField = field }
+            let browse = NSButton(frame: NSRect(x: 430, y: y, width: 70, height: 24))
+            browse.title = L("settings.tls.browse")
+            browse.bezelStyle = .rounded
+            browse.tag = index
+            browse.target = self
+            browse.action = #selector(browseTLSFile(_:))
+            container.addSubview(browse)
+            y -= 30
+        }
+        let tlsHint = makeLabel(L("settings.tls.hint"), size: 10, bold: false)
+        tlsHint.frame = NSRect(x: 20, y: y, width: 480, height: 18)
+        tlsHint.textColor = .secondaryLabelColor
+        container.addSubview(tlsHint)
+        y -= 36
 
         // ── Auto Start ──
         let autoCheck = NSButton(checkboxWithTitle: L("settings.autostart.checkbox"), target: nil, action: nil)
@@ -208,7 +271,12 @@ class SettingsWindow: NSObject, NSWindowDelegate {
         envBtn.action = #selector(openEnvFile)
         container.addSubview(envBtn)
 
-        return container
+        let scroll = NSScrollView(frame: NSRect(x: 0, y: 0, width: 520, height: 720))
+        scroll.hasVerticalScroller = true
+        scroll.documentView = container
+        scroll.contentView.scroll(to: NSPoint(x: 0, y: 180))
+        scroll.reflectScrolledClipView(scroll.contentView)
+        return scroll
     }
 
     // MARK: - Helpers
@@ -220,6 +288,32 @@ class SettingsWindow: NSObject, NSWindowDelegate {
     }
 
     // MARK: - Actions
+
+    @objc private func networkModeChanged() {
+        let isLocal = bindMode?.indexOfSelectedItem == 0
+        if isLocal { bindAddress?.stringValue = "127.0.0.1" }
+        else if bindMode?.indexOfSelectedItem == 1 && bindAddress?.stringValue == "127.0.0.1" {
+            bindAddress?.stringValue = ""
+        }
+        bindAddress?.isEnabled = !isLocal
+    }
+
+    @objc private func browseTLSFile(_ sender: NSButton) {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        if panel.runModal() == .OK, let url = panel.url {
+            (sender.tag == 0 ? certField : keyField)?.stringValue = url.path
+        }
+    }
+
+    private func settingsError(_ message: String) {
+        let alert = NSAlert()
+        alert.messageText = L("settings.network.invalid")
+        alert.informativeText = message
+        alert.alertStyle = .warning
+        alert.runModal()
+    }
 
     @objc private func copyApiKey() {
         NSPasteboard.general.clearContents()
@@ -293,15 +387,57 @@ class SettingsWindow: NSObject, NSWindowDelegate {
     @objc private func saveSettings(_ sender: Any) {
         guard let contentView = window?.contentView else { return }
 
-        var envVars: [String: String] = [:]
+        // Merge with existing values so saving does not delete tunnel hostname or custom settings.
+        let envPath = Config.shared.configDir + "/.env"
+        let existingContents: String
+        do {
+            existingContents = try String(contentsOfFile: envPath, encoding: .utf8)
+        } catch {
+            settingsError(error.localizedDescription); return
+        }
+        var envVars = EnvParser.parse(existingContents)
+        let host = (bindAddress?.stringValue ?? "127.0.0.1").trimmingCharacters(in: .whitespacesAndNewlines)
+        let hosts = host.components(separatedBy: ",").map { $0.trimmingCharacters(in: .whitespaces) }
+        let validAddress: (String) -> Bool = { value in
+            var ipv4 = in_addr()
+            var ipv6 = in6_addr()
+            return inet_pton(AF_INET, value, &ipv4) == 1 || inet_pton(AF_INET6, value, &ipv6) == 1
+        }
+        guard !hosts.isEmpty, hosts.allSatisfy(validAddress) else {
+            settingsError(L("settings.network.address_error")); return
+        }
+        if bindMode?.indexOfSelectedItem == 1 {
+            guard hosts.count == 1, !["0.0.0.0", "::", "::1"].contains(hosts[0]), !hosts[0].hasPrefix("127.") else {
+                settingsError(L("settings.network.lan_error")); return
+            }
+        }
+        envVars["HOST"] = hosts.joined(separator: ",")
+        envVars["TLS_ENABLED"] = tlsCheck?.state == .on ? "true" : "false"
+        for (key, field) in [("TLS_CERT_PATH", certField), ("TLS_KEY_PATH", keyField)] {
+            let value = field?.stringValue.trimmingCharacters(in: .whitespaces) ?? ""
+            guard value.rangeOfCharacter(from: .newlines) == nil else {
+                settingsError(L("settings.tls.path_error")); return
+            }
+            if tlsCheck?.state == .on {
+                var isDirectory: ObjCBool = false
+                guard value.hasPrefix("/"), FileManager.default.fileExists(atPath: value, isDirectory: &isDirectory),
+                      !isDirectory.boolValue, FileManager.default.isReadableFile(atPath: value) else {
+                    settingsError(L("settings.tls.path_error")); return
+                }
+            }
+            envVars[key] = value
+        }
         envVars["MCP_API_KEY"] = apiField?.stringValue ?? Config.shared.apiKey
 
         // Read port fields
         let portKeys = ["PORT", "PLAYWRIGHT_PORT", "PROXY_PORT"]
         for i in 0..<3 {
             if let field = contentView.viewWithTag(201 + i) as? NSTextField {
-                let val = field.stringValue.replacingOccurrences(of: ",", with: "")
-                envVars[portKeys[i]] = val
+                let val = field.stringValue.trimmingCharacters(in: .whitespaces)
+                guard let port = Int(val), (1...65535).contains(port) else {
+                    settingsError(L("settings.network.port_error")); return
+                }
+                envVars[portKeys[i]] = String(port)
             }
         }
 
@@ -313,21 +449,23 @@ class SettingsWindow: NSObject, NSWindowDelegate {
         // Tunnel token
         if let field = contentView.viewWithTag(400) as? NSTextField {
             let token = field.stringValue.trimmingCharacters(in: .whitespaces)
-            if !token.isEmpty {
-                envVars["CLOUDFLARE_TUNNEL_TOKEN"] = token
-            }
+            envVars["CLOUDFLARE_TUNNEL_TOKEN"] = token
         }
 
         // Save to .env
-        let envPath = Config.shared.configDir + "/.env"
         var lines = ["# mac-remote-mcp configuration", ""]
-        for key in ["MCP_API_KEY", "PORT", "PLAYWRIGHT_PORT", "PROXY_PORT", "AUTO_START", "CLOUDFLARE_TUNNEL_TOKEN", "TUNNEL_HOSTNAME"] {
+        for key in envVars.keys.sorted() {
             if let val = envVars[key] {
                 lines.append("\(key)=\(val)")
             }
         }
         lines.append("")
-        try? lines.joined(separator: "\n").write(toFile: envPath, atomically: true, encoding: .utf8)
+        do {
+            try lines.joined(separator: "\n").write(toFile: envPath, atomically: true, encoding: .utf8)
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: envPath)
+        } catch {
+            settingsError(error.localizedDescription); return
+        }
 
         // Auto-restart
         Self.relaunchApp()
